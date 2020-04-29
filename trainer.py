@@ -206,7 +206,7 @@ class Trainer(object):
         }
 
         # Intent result
-        # intent_preds = np.argmax(intent_preds, axis=1)#axis=1：按行查找最大元素 axis=0：按列查找最大元素
+        intent_preds = np.argmax(intent_preds, axis=1)#axis=1：按行查找最大元素 axis=0：按列查找最大元素
 
 
         # Slot result
