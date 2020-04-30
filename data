@@ -1,1 +1,25 @@
+#数据格式需要处理成Bert可接受的形式。
+原始格式为：
+一 O
+节 O
+课 O
+的 O
+时 O
+间 O
+真 O
+心 O
+感 O
+动 O
+了 O
+李 B-PER.NAM
+开 I-PER.NAM
+复 E-PER.NAM
+感 O
+动 O
+
+Bert的输入格式为（可以存储在两个文件中）：
+一 节 课 的 时 间 真 心 感 动 了 李 开 复 感 动
+O O O O O O O O O O O B-PER.NAM I-PER.NAM I-PER.NAM O O
+
+
 
