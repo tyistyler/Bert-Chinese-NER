@@ -132,7 +132,7 @@ class Trainer(object):
         #Eval!
         # logger.info("*** Running evaluation on %s dataset ******", mode)
         logger.info("   Num examples = %d",len(dataset))
-        logger.info("   Batch size = %d", len(self.args.batch_size))
+        logger.info("   Batch size = %d", self.args.batch_size)
         eval_loss = 0.0
         nb_eval_steps = 0
         slot_preds = None
