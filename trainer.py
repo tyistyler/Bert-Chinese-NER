@@ -166,7 +166,7 @@ class Trainer(object):
 
             else:
                 if self.args.use_crf:
-                    slot_preds = np.append(slot_preds, np.append(self.model.crf.decode(slot_logits)), axis=0)
+                    slot_preds = np.append(slot_preds, np.array(self.model.crf.decode(slot_logits)), axis=0)
                 else:
                     slot_preds = np.append(slot_preds, slot_logits.detach().cpu().numpy(), axis=0)
                 out_slot_labels_ids = np.append(out_slot_labels_ids, inputs["slot_labels_ids"].detach().cpu().numpy(), axis=0)
