@@ -62,7 +62,7 @@ class JointBERT(BertPreTrainedModel):
                 padded_slot_labels_ids = slot_labels_ids.detach().clone()
                 padded_slot_labels_ids[padded_slot_labels_ids == self.args.ignore_index] = self.slot_pad_token_idx
 
-                slot_loss = self.crf(slot_logits, padded_slot_labels_ids, mask=attention_mask.bype(), reduction='mean')
+                slot_loss = self.crf(slot_logits, padded_slot_labels_ids, mask=attention_mask.byte(), reduction='mean')
                 slot_loss = -1 * slot_loss# negative log_likelihood
             else:
                 slot_loss_fct = nn.CrossEntropyLoss(ignore_index=self.args.ignore_index)
