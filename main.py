@@ -3,7 +3,7 @@ import os
 import torch
 
 from trainer import Trainer
-from utils import init_logger, load_tokenizer, read_prediction_test, MODEL_CLASSES, MODEL_PATH_MAP
+from utils import init_logger, load_tokenizer, read_prediction_text, MODEL_CLASSES, MODEL_PATH_MAP
 import logging
 from data_loader import load_and_cache_examples
 
@@ -24,10 +24,10 @@ def main(args):
     if args.do_eval:
         trainer.load_model()
         trainer.evaluate("test")
-    # if args.do_pred:
-    #     trainer.load_model()
-    #     test = read_prediction_text(args)
-    #     trainer.predict(tests, tokenizer)
+    if args.do_pred:
+        trainer.load_model()
+        texts = read_prediction_text(args)
+        trainer.predict(texts, tokenizer)
 
 
 
@@ -71,7 +71,7 @@ if __name__ == '__main__':
     #For prediction
     parser.add_argument("--pred_dir", default="./preds", type=str, help="The input prediction dir")
     parser.add_argument("--pred_input_file", default="preds.txt", type=str, help="Teh input text file of lines for prediction")
-    parser.add_argument("--pred_outpit_file", default="outputs.txt", type=str, help="The output file of prediction")
+    parser.add_argument("--pred_output_file", default="outputs.txt", type=str, help="The output file of prediction")
     parser.add_argument("--do_pred", action='store_true', help="Whether to predict the sentences")
 
     #CRF option
