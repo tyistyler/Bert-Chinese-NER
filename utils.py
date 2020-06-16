@@ -27,6 +27,9 @@ def get_slot_labels(args):
 def load_tokenizer(args):
     return MODEL_CLASSES[args.model_type][2].from_pretrained(args.model_name_or_path)
 
+def read_prediction_text(args):
+    return [text.strip() for text in open(os.path.join(args.pred_dir, args.pred_input_file), 'r', encoding='utf-8')]
+
 def init_logger():
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
