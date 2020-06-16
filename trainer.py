@@ -223,7 +223,120 @@ class Trainer(object):
         except:
             raise Exception("Some model files might be missing...")
 
+    def _convert_texts_to_tensors(self, texts, tokenizer,
+                                  cls_token_segment_id=0,
+                                  pad_token_segment_id=0,
+                                  sequence_a_segment_id=0,
+                                  mask_padding_with_zero=True):
+        
+        # Setting based on the current model type
+        cls_token = tokenizer.cls_token
+        sep_token = tokenizer.sep_token
+        unk_token = tokenizer.unk_token
+        pad_token_id = tokenizer.pad_token_id
 
+        input_ids_batch = []
+        attention_mask_batch = []
+        token_type_ids_batch = []
+        slot_label_mask_batch = []
+
+        for text in texts:
+            tokens = []
+            slot_label_mask = []
+            for word in text.split():
+                word_tokens = tokenizer.tokenize(word)
+                if not word_tokens:
+                    word_tokens = [unk_token]  # For handling the bad-encoded word
+                tokens.extend(word_tokens)
+                # Real label position as 0 for the first token of the word, and padding ids for the remaining tokens
+                slot_label_mask.extend([0] + [self.pad_token_label_id] * (len(word_tokens) - 1))
+
+            # Account for [CLS] and [SEP]
+            special_tokens_count = 2
+            if len(tokens) > self.args.max_seq_len - special_tokens_count:
+                tokens = tokens[:(self.args.max_seq_len - special_tokens_count)]
+                slot_label_mask = slot_label_mask[:(self.args.max_seq_len - special_tokens_count)]
+
+            # Add [SEP] token
+            tokens += [sep_token]
+            slot_label_mask += [self.pad_token_label_id]
+            token_type_ids = [sequence_a_segment_id] * len(tokens)
+
+            # Add [CLS] token
+            tokens = [cls_token] + tokens
+            slot_label_mask = [self.pad_token_label_id] + slot_label_mask
+            token_type_ids = [cls_token_segment_id] + token_type_ids
+
+            input_ids = tokenizer.convert_tokens_to_ids(tokens)
+
+            # The mask has 1 for real tokens and 0 for padding tokens. Only real
+            # tokens are attended to.
+            attention_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
+
+            # Zero-pad up to the sequence length.
+            padding_length = self.args.max_seq_len - len(input_ids)
+            input_ids = input_ids + ([pad_token_id] * padding_length)
+            attention_mask = attention_mask + ([0 if mask_padding_with_zero else 1] * padding_length)
+            token_type_ids = token_type_ids + ([pad_token_segment_id] * padding_length)
+            slot_label_mask = slot_label_mask + ([self.pad_token_label_id] * padding_length)
+
+            input_ids_batch.append(input_ids)
+            attention_mask_batch.append(attention_mask)
+            token_type_ids_batch.append(token_type_ids)
+            slot_label_mask_batch.append(slot_label_mask)
+
+        # Making tensor that is batch size of 1
+        input_ids_batch = torch.tensor(input_ids_batch, dtype=torch.long).to(self.device)
+        attention_mask_batch = torch.tensor(attention_mask_batch, dtype=torch.long).to(self.device)
+        token_type_ids_batch = torch.tensor(token_type_ids_batch, dtype=torch.long).to(self.device)
+        slot_label_mask_batch = torch.tensor(slot_label_mask_batch, dtype=torch.long).to(self.device)
+
+        return input_ids_batch, attention_mask_batch, token_type_ids_batch, slot_label_mask_batch
+
+    def predict(self, texts, tokenizer):
+        batch = self._convert_texts_to_tensors(texts, tokenizer)
+
+        slot_label_mask = batch[3]
+        self.model.eval()
+
+        # We have only one batch
+        with torch.no_grad():
+            inputs = {'input_ids': batch[0],
+                      'attention_mask': batch[1],
+                      'slot_labels_ids': None}
+            if self.args.model_type != 'distilbert':
+                inputs['token_type_ids'] = batch[2]
+            outputs = self.model(**inputs)
+            _, slot_logits = outputs[:2]  # loss doesn't needed
+
+
+        # Slot prediction
+        if self.args.use_crf:
+            slot_preds = np.array(self.model.crf.decode(slot_logits))
+        else:
+            slot_preds = slot_logits.detach().cpu().numpy()
+            slot_preds = np.argmax(slot_preds, axis=2)
+
+        out_slot_labels_ids = slot_label_mask.detach().cpu().numpy()
+
+        slot_label_map = {i: label for i, label in enumerate(self.slot_label_lst)}
+        slot_preds_list = [[] for _ in range(out_slot_labels_ids.shape[0])]
+
+        for i in range(out_slot_labels_ids.shape[0]):
+            for j in range(out_slot_labels_ids.shape[1]):
+                if out_slot_labels_ids[i, j] != self.pad_token_label_id:
+                    slot_preds_list[i].append(slot_label_map[slot_preds[i][j]])
+
+        # Make output.txt with texts and slot_preds_list
+        with open(os.path.join(self.args.pred_dir, self.args.pred_output_file), 'w', encoding='utf-8') as f:
+            for text, slots in zip(texts, slot_preds_list):
+                f.write("text: {}\n".format(text))
+                f.write("slots: {}\n".format(' '.join(slots)))
+                f.write("\n")
+
+        # print output.json
+        with open(os.path.join(self.args.pred_dir, self.args.pred_output_file), 'r', encoding='utf-8') as f:
+            print(f.read())
 
 
 
