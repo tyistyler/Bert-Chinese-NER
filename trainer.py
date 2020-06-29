@@ -1,15 +1,16 @@
 import os
 import logging
-from tqdm import tqdm,trange
+from tqdm import tqdm, trange
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 from transformers import BertConfig, AdamW, get_linear_schedule_with_warmup
 
 from utils import MODEL_CLASSES, set_seed, compute_metrics, get_slot_labels
 
 logger = logging.getLogger(__name__)
+
 
 class Trainer(object):
     def __init__(self, args, train_dataset=None, dev_dataset=None, test_dataset=None):
@@ -19,38 +20,42 @@ class Trainer(object):
         self.test_dataset = test_dataset
 
         self.slot_label_lst = get_slot_labels(args)
-        #Use cross entropy ignore index as padding label id so that only real label ids contribute to the loss later
-        self.pad_token_label_id = args.ignore_index#-100
+        # Use cross entropy ignore index as padding label id so that only real label ids contribute to the loss later
+        self.pad_token_label_id = args.ignore_index  # -100
 
-        self.config_class, self.model_class, _ =MODEL_CLASSES[args.model_type]#BertConfig, JointBERT, BertTokenizer
+        self.config_class, self.model_class, _ = MODEL_CLASSES[args.model_type]  # BertConfig, JointBERT, BertTokenizer
         self.bert_config = self.config_class.from_pretrained(args.model_name_or_path, finetuning_task=args.task)
 
         self.model = self.model_class(self.bert_config, args, self.slot_label_lst)
 
-        #Gpu of CPU
+        # Gpu of CPU
         self.device = "cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu"
         self.model.to(self.device)
 
     def train(self):
-        #定义采样方式，对象为样本特征
+        # 定义采样方式，对象为样本特征
         train_sampler = RandomSampler(self.train_dataset)
-        #构建dataloader，其本质是一个可迭代对象，batch_size=16
+        # 构建dataloader，其本质是一个可迭代对象，batch_size=16
         train_dataloader = DataLoader(self.train_dataset, sampler=train_sampler, batch_size=self.args.batch_size)
 
         if self.args.max_steps > 0:
             t_total = self.args.max_steps
-            self.args.num_train_epochs = self.args.max_steps // (len(train_dataloader) // self.args.gradient_accumulation_steps) + 1
+            self.args.num_train_epochs = self.args.max_steps // (
+                        len(train_dataloader) // self.args.gradient_accumulation_steps) + 1
         else:
             t_total = len(train_dataloader) // self.args.gradient_accumulation_steps * self.args.num_train_epochs
 
         # Prepare optimizer and schedule (linear warmup and decay)
         no_decay = ['bias', 'LayerNorm.weight']
         optimizer_grouped_parameters = [
-            {'params':[p for n,p in self.model.named_parameters() if not any(nd in n for nd in no_decay)],'weight_decay': self.args.weight_decay},
-            {'params':[p for n,p in self.model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+            {'params': [p for n, p in self.model.named_parameters() if not any(nd in n for nd in no_decay)],
+             'weight_decay': self.args.weight_decay},
+            {'params': [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)],
+             'weight_decay': 0.0}
         ]
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate, eps=self.args.adam_epsilon)
-        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=self.args.warmup_steps, num_training_steps=t_total)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=self.args.warmup_steps,
+                                                    num_training_steps=t_total)
 
         # Train!
         logger.info("***** Running training *****")
@@ -64,7 +69,7 @@ class Trainer(object):
         tr_loss = 0.0
         self.model.zero_grad()
 
-        train_iterator = trange(int(self.args.num_train_epochs), desc="Epoch")#进度条，如分成10组
+        train_iterator = trange(int(self.args.num_train_epochs), desc="Epoch")  # 进度条，如分成10组
         set_seed(self.args)
 
         for _ in train_iterator:
@@ -74,9 +79,9 @@ class Trainer(object):
                 batch = tuple(t.to(self.device) for t in batch)
 
                 inputs = {
-                            'input_ids':batch[0],
-                            'attention_mask':batch[1],
-                            'slot_labels_ids':batch[3]
+                    'input_ids': batch[0],
+                    'attention_mask': batch[1],
+                    'slot_labels_ids': batch[3]
                 }
                 if self.args.model_type != 'distilbert':
                     inputs['token_type_ids'] = batch[2]
@@ -92,10 +97,10 @@ class Trainer(object):
                 tr_loss += loss.item()
                 # 每n个batch(把这些batch的梯度求和)，更新一次参数
                 if (step + 1) % self.args.gradient_accumulation_steps == 0:
-                    #梯度裁剪
+                    # 梯度裁剪
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
 
-                    #反 向传播，更新参数
+                    # 反 向传播，更新参数
                     optimizer.step()
                     # 更新学习率
                     scheduler.step()
@@ -103,9 +108,9 @@ class Trainer(object):
                     self.model.zero_grad()
                     global_step += 1
 
-                    #logging_steps = 200
+                    # logging_steps = 200
                     if self.args.logging_steps > 0 and global_step % self.args.logging_steps == 0:
-                        self.evaluate("dev")# fine-tuning
+                        self.evaluate("dev")  # fine-tuning
 
                     # save_steps = 200
                     if self.args.save_steps > 0 and global_step % self.args.save_steps == 0:
@@ -129,9 +134,9 @@ class Trainer(object):
 
         eval_sampler = SequentialSampler(dataset)
         eval_dataloader = DataLoader(dataset, sampler=eval_sampler, batch_size=self.args.batch_size)
-        #Eval!
+        # Eval!
         # logger.info("*** Running evaluation on %s dataset ******", mode)
-        logger.info("   Num examples = %d",len(dataset))
+        logger.info("   Num examples = %d", len(dataset))
         logger.info("   Batch size = %d", self.args.batch_size)
         eval_loss = 0.0
         nb_eval_steps = 0
@@ -142,7 +147,7 @@ class Trainer(object):
 
         for batch in tqdm(eval_dataloader, desc="Evaluating"):
             batch = tuple(t.to(self.device) for t in batch)
-            with torch.no_grad():#不计算梯度
+            with torch.no_grad():  # 不计算梯度
                 inputs = {'input_ids': batch[0],
                           'attention_mask': batch[1],
                           'slot_labels_ids': batch[3]}
@@ -169,9 +174,10 @@ class Trainer(object):
                     slot_preds = np.append(slot_preds, np.array(self.model.crf.decode(slot_logits)), axis=0)
                 else:
                     slot_preds = np.append(slot_preds, slot_logits.detach().cpu().numpy(), axis=0)
-                out_slot_labels_ids = np.append(out_slot_labels_ids, inputs["slot_labels_ids"].detach().cpu().numpy(), axis=0)
+                out_slot_labels_ids = np.append(out_slot_labels_ids, inputs["slot_labels_ids"].detach().cpu().numpy(),
+                                                axis=0)
 
-        eval_loss = eval_loss / nb_eval_steps#平均损失
+        eval_loss = eval_loss / nb_eval_steps  # 平均损失
         results = {
             "loss": eval_loss
         }
@@ -182,11 +188,11 @@ class Trainer(object):
         out_slot_label_list = [[] for _ in range(out_slot_labels_ids.shape[0])]
         slot_preds_list = [[] for _ in range(out_slot_labels_ids.shape[0])]
 
-        for i in range(out_slot_labels_ids.shape[0]):#shape[0]-->行数
-            for j in range(out_slot_labels_ids.shape[1]):#shape[1]-->列数
+        for i in range(out_slot_labels_ids.shape[0]):  # shape[0]-->行数
+            for j in range(out_slot_labels_ids.shape[1]):  # shape[1]-->列数
                 if out_slot_labels_ids[i, j] != self.pad_token_label_id:
-                    out_slot_label_list[i].append(slot_label_map[out_slot_labels_ids[i][j]])# real label
-                    slot_preds_list[i].append(slot_label_map[slot_preds[i][j]])# pred label
+                    out_slot_label_list[i].append(slot_label_map[out_slot_labels_ids[i][j]])  # real label
+                    slot_preds_list[i].append(slot_label_map[slot_preds[i][j]])  # pred label
 
         total_result = compute_metrics(slot_preds_list, out_slot_label_list)
 
@@ -194,7 +200,7 @@ class Trainer(object):
 
         logger.info("*****   Eval results  *****")
         for key in sorted(results.keys()):
-            logger.info("   %s = %s",key, str(results[key]))
+            logger.info("   %s = %s", key, str(results[key]))
 
         return results
 
@@ -208,6 +214,7 @@ class Trainer(object):
         model_to_save.save_pretrained(output_dir)
         torch.save(self.args, os.path.join(output_dir, 'training_config.bin'))
         logger.info("Saving model checkpoint to %s", output_dir)
+
     def load_model(self):
         # Check whether model exists
         if not os.path.exists(self.args.model_dir):
@@ -228,7 +235,10 @@ class Trainer(object):
                                   pad_token_segment_id=0,
                                   sequence_a_segment_id=0,
                                   mask_padding_with_zero=True):
-        
+        """
+        Only add input_ids, attention_mask, token_type_ids
+        Labels aren't required.
+        """
         # Setting based on the current model type
         cls_token = tokenizer.cls_token
         sep_token = tokenizer.sep_token
@@ -291,54 +301,70 @@ class Trainer(object):
         token_type_ids_batch = torch.tensor(token_type_ids_batch, dtype=torch.long).to(self.device)
         slot_label_mask_batch = torch.tensor(slot_label_mask_batch, dtype=torch.long).to(self.device)
 
-        return input_ids_batch, attention_mask_batch, token_type_ids_batch, slot_label_mask_batch
+        print(input_ids_batch.size())
+
+        dataset = TensorDataset(input_ids_batch, attention_mask_batch, token_type_ids_batch, slot_label_mask_batch)
+
+        return dataset
 
     def predict(self, texts, tokenizer):
-        batch = self._convert_texts_to_tensors(texts, tokenizer)
+        dataset = self._convert_texts_to_tensors(texts, tokenizer)
 
-        slot_label_mask = batch[3]
-        self.model.eval()
+        # Predict
+        sampler = SequentialSampler(dataset)
+        data_loader = DataLoader(dataset, sampler=sampler, batch_size=self.args.batch_size)
 
-        # We have only one batch
-        with torch.no_grad():
-            inputs = {'input_ids': batch[0],
-                      'attention_mask': batch[1],
-                      'slot_labels_ids': None}
-            if self.args.model_type != 'distilbert':
-                inputs['token_type_ids'] = batch[2]
-            outputs = self.model(**inputs)
-            _, slot_logits = outputs[:2]  # loss doesn't needed
+        all_slot_label_mask = None
+        slot_preds = None
 
+        for batch in tqdm(data_loader, desc="Predicting"):
+            batch = tuple(t.to(self.device) for t in batch)
+            # We have only one batch
+            with torch.no_grad():
+                inputs = {'input_ids': batch[0],
+                          'attention_mask': batch[1],
+                          'intent_label_ids': None,
+                          'slot_labels_ids': None}
+                if self.args.model_type != 'distilbert':
+                    inputs['token_type_ids'] = batch[2]
+                outputs = self.model(**inputs)
+                _, slot_logits = outputs[:2]  # loss doesn't needed
 
+                # Slot prediction
+                if slot_preds is None:
+                    if self.args.use_crf:
+                        slot_preds = np.array(self.model.crf.decode(slot_logits))
+                    else:
+                        slot_preds = slot_logits.detach().cpu().numpy()
+                    all_slot_label_mask = batch[3].detach().cpu().numpy
+                else:
+                    if self.args.use_crf:
+                        slot_preds = np.append(slot_preds, np.array(self.model.crf.decode(slot_logits)), axis=0)
+                    else:
+                        slot_preds = np.append(slot_preds, slot_logits.detach().cpu().numpy(),axis=0)
+                    all_slot_label_mask = np.append(all_slot_label_mask, batch[3].detach().cpu().numpy, axis=0)
         # Slot prediction
         if self.args.use_crf:
-            slot_preds = np.array(self.model.crf.decode(slot_logits))
+            slot_preds = slot_preds
         else:
-            slot_preds = slot_logits.detach().cpu().numpy()
             slot_preds = np.argmax(slot_preds, axis=2)
 
-        out_slot_labels_ids = slot_label_mask.detach().cpu().numpy()
-
         slot_label_map = {i: label for i, label in enumerate(self.slot_label_lst)}
-        slot_preds_list = [[] for _ in range(out_slot_labels_ids.shape[0])]
+        slot_preds_list = [[] for _ in range(slot_preds.shape[0])]
 
-        for i in range(out_slot_labels_ids.shape[0]):
-            for j in range(out_slot_labels_ids.shape[1]):
-                if out_slot_labels_ids[i, j] != self.pad_token_label_id:
+        for i in range(slot_preds.shape[0]):
+            for j in range(slot_preds.shape[1]):
+                if all_slot_label_mask[i, j] != self.pad_token_label_id:
                     slot_preds_list[i].append(slot_label_map[slot_preds[i][j]])
 
-        # Make output.txt with texts and slot_preds_list
-        with open(os.path.join(self.args.pred_dir, self.args.pred_output_file), 'w', encoding='utf-8') as f:
+        # Make output.txt with texts, intent_list and slot_preds_list
+        with open(os.path.join(self.args.pred_dir, self.args.pred_output_file), 'a', encoding='utf-8') as f:
             for text, slots in zip(texts, slot_preds_list):
                 f.write("text: {}\n".format(text))
                 f.write("slots: {}\n".format(' '.join(slots)))
                 f.write("\n")
 
-        # print output.json
-        with open(os.path.join(self.args.pred_dir, self.args.pred_output_file), 'r', encoding='utf-8') as f:
-            print(f.read())
-
-
-
+        print('finished prediction!!!')
+       
 
 
