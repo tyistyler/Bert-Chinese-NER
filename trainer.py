@@ -323,7 +323,6 @@ class Trainer(object):
             with torch.no_grad():
                 inputs = {'input_ids': batch[0],
                           'attention_mask': batch[1],
-                          'intent_label_ids': None,
                           'slot_labels_ids': None}
                 if self.args.model_type != 'distilbert':
                     inputs['token_type_ids'] = batch[2]
@@ -336,13 +335,13 @@ class Trainer(object):
                         slot_preds = np.array(self.model.crf.decode(slot_logits))
                     else:
                         slot_preds = slot_logits.detach().cpu().numpy()
-                    all_slot_label_mask = batch[3].detach().cpu().numpy
+                    all_slot_label_mask = batch[3].detach().cpu().numpy()
                 else:
                     if self.args.use_crf:
                         slot_preds = np.append(slot_preds, np.array(self.model.crf.decode(slot_logits)), axis=0)
                     else:
                         slot_preds = np.append(slot_preds, slot_logits.detach().cpu().numpy(),axis=0)
-                    all_slot_label_mask = np.append(all_slot_label_mask, batch[3].detach().cpu().numpy, axis=0)
+                    all_slot_label_mask = np.append(all_slot_label_mask, batch[3].detach().cpu().numpy(), axis=0)
         # Slot prediction
         if self.args.use_crf:
             slot_preds = slot_preds
