@@ -100,7 +100,7 @@ class Trainer(object):
                     # 梯度裁剪
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
 
-                    # 反 向传播，更新参数
+                    # 反向传播，更新参数
                     optimizer.step()
                     # 更新学习率
                     scheduler.step()
