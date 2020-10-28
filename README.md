@@ -7,3 +7,5 @@
     python main.py --task weibo --model_type bert --model_dir weibo_model --do_train --do_eval (--use_crf)
 ## How to predict the new data
     python main.py --task weibo --model_type bert --model_dir weibo_model --do_pred (--use_crf)
+## Some question about dataset
+    the dataset we use has some quertion,you can download it in here[https://github.com/hltcoe/golden-horse/tree/master/data]
