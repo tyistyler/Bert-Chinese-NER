@@ -73,7 +73,7 @@ class JointBERT(BertPreTrainedModel):
                     active_labels = slot_labels_ids.view(-1)[active_loss]
                     slot_loss = slot_loss_fct(active_logits, active_labels)
                 else:
-                    slot_loss = slot_loss_fct(slot_logits.view(-1, self.num_slot_labels), slot_labels_ids(-1))
+                    slot_loss = slot_loss_fct(slot_logits.view(-1, self.num_slot_labels), slot_labels_ids.view(-1))
 
             total_loss += self.args.slot_loss_coef * slot_loss
         outputs = (slot_logits,) + outputs[1:]
