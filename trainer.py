@@ -109,15 +109,20 @@ class Trainer(object):
                     global_step += 1
 
                     # logging_steps = 200
-                    if self.args.logging_steps > 0 and global_step % self.args.logging_steps == 0:
-                        self.evaluate("dev")  # fine-tuning
+#                     if self.args.logging_steps > 0 and global_step % self.args.logging_steps == 0:
+#                         self.evaluate("dev")  # fine-tuning
 
                     # save_steps = 200
-                    if self.args.save_steps > 0 and global_step % self.args.save_steps == 0:
-                        self.save_model()
+#                     if self.args.save_steps > 0 and global_step % self.args.save_steps == 0:
+#                         self.save_model()
                 if 0 < self.args.max_steps < global_step:
                     epoch_iterator.close()
                     break
+                    
+            res = self.evaluate("dev")  # fine-tuning
+            if self.best_f < res['f_score']:
+                self.save_model()
+            
             if 0 < self.args.max_steps < global_step:
                 train_iterator.close()
                 break
