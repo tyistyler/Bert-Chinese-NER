@@ -18,7 +18,8 @@ class Trainer(object):
         self.train_dataset = train_dataset
         self.dev_dataset = dev_dataset
         self.test_dataset = test_dataset
-
+        
+        self.best_f = 0
         self.slot_label_lst = get_slot_labels(args)
         # Use cross entropy ignore index as padding label id so that only real label ids contribute to the loss later
         self.pad_token_label_id = args.ignore_index  # -100
