@@ -10,8 +10,9 @@ from data_loader import load_and_cache_examples
 logger = logging.getLogger(__name__)
 
 def main(args):
-    init_logger()#输出信息
-    tokenizer = load_tokenizer(args)# 加载预训练模型
+    init_logger()                       # 输出信息
+    set_seed(args)                      # 设置随机种子
+    tokenizer = load_tokenizer(args)    # 加载预训练模型
 
     train_dataset = load_and_cache_examples(args, tokenizer, mode="train")
     dev_dataset   = load_and_cache_examples(args, tokenizer, mode="dev")
