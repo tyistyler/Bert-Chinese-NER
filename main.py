@@ -3,7 +3,7 @@ import os
 import torch
 
 from trainer import Trainer
-from utils import init_logger, load_tokenizer, read_prediction_text, MODEL_CLASSES, MODEL_PATH_MAP
+from utils import init_logger, load_tokenizer, read_prediction_text, MODEL_CLASSES, MODEL_PATH_MAP, set_seed
 import logging
 from data_loader import load_and_cache_examples
 
