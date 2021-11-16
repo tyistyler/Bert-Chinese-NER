@@ -121,6 +121,7 @@ class Trainer(object):
                     
             res = self.evaluate("dev")  # fine-tuning
             if self.best_f < res['slot_f1']:
+                self.best_f = res['slot_f1']
                 self.save_model()
             
             if 0 < self.args.max_steps < global_step:
