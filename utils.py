@@ -37,11 +37,14 @@ def init_logger():
 #为当前GPU设置随机种子，以使得结果是确定的
 #不加入manual_seed时，随机数会变化
 def set_seed(args):
+    torch.manual_seed(args.seed)                 # 为cpu分配随机种子
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(args.seed)        # 为gpu分配随机种子
+        torch.cuda.manual_seed_all(args.seed)    # 若使用多块gpu，使用该命令设置随机种子
     random.seed(args.seed)
     np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if not args.no_cuda and torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmard = False
 
 def compute_metrics(slot_preds, slot_labels):
     assert len(slot_preds) == len(slot_labels)
